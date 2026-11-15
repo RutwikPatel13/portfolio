@@ -1,0 +1,28 @@
+# Secrets stay out of the build context entirely: the container gets its env
+# values at run time, from files that live only on the Pi.
+.env*
+
+# Rebuilt inside the image, for linux/arm64 rather than this machine.
+node_modules
+.next
+*.tsbuildinfo
+
+# Not part of the app. tests/ and scripts/ stay in: tsconfig includes them, so
+# the build's type check should see the same files it sees locally.
+.git
+.github
+.vercel
+.claude
+.DS_Store
+brag-output
+docs
+scripts/.cache
+test-results
+playwright-report
+blob-report
+CNAME
+CLAUDE.md
+README.md
+LICENSE
+Dockerfile
+.dockerignore
