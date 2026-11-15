@@ -11,7 +11,7 @@ Most "Text-to-SQL" demos you see online are deceptively simple. Type "show me to
 
 Then you try it on a real schema with 40 tables, nullable foreign keys, and dialect-specific syntax, and it falls apart.
 
-I built [TalkToData](https://talktodata.vercel.app/) to see how far you can push a small LLM for SQL generation, and learned a few things worth sharing.
+I built [TalkToData](https://talktodata.rutwik.dev/) to see how far you can push a small LLM for SQL generation, and learned a few things worth sharing.
 
 ## The core problem: SQL is unforgiving
 
@@ -101,4 +101,4 @@ MongoDB was the outlier. It's not SQL at all, so the output is aggregation pipel
 
 LLMs are good at SQL generation when you give them structure. Few-shot examples, error recovery, and dialect-specific prompts together make a usable tool from a 8B model running on free infrastructure. The hard part isn't the AI. It's the UX: making failure graceful and uncertainty invisible to the user.
 
-[Try TalkToData →](https://talktodata.vercel.app/)
+[Try TalkToData →](https://talktodata.rutwik.dev/)

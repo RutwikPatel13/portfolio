@@ -310,7 +310,7 @@ export const projects: Project[] = [
     category: 'web development',
     image: '/myimg/Project_TalkToData.jpg',
     imageAlt: 'TalkToData, an AI-powered SQL query interface converting natural language to SQL, supporting PostgreSQL, MySQL, SQLite, SQL Server, and MongoDB by Rutwik Patel',
-    link: 'https://talktodata.vercel.app/',
+    link: 'https://talktodata.rutwik.dev/',
     description: 'AI-powered SQL query interface that converts plain English to SQL. Supports PostgreSQL, MySQL, SQLite, SQL Server, and MongoDB with AI-driven query explanations and error fixing.',
     tech: ['Next.js', 'TypeScript', 'Groq AI', 'Tailwind'],
     hasLiveDemo: true,
