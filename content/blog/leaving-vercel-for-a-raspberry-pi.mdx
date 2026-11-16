@@ -1,0 +1,96 @@
+---
+title: "Leaving Vercel: My Sites Now Run on a Shared Raspberry Pi"
+description: "Why I moved my portfolio and TalkToData off Vercel onto a flatmate's Raspberry Pi 5, how it is wired with Docker and a Cloudflare tunnel, and what broke on the way."
+date: "2026-11-15"
+tags: ["Self-Hosting", "Raspberry Pi", "Docker", "Cloudflare"]
+readTime: "7 min read"
+slug: "leaving-vercel-for-a-raspberry-pi"
+---
+
+In one week in November I hit two free-tier walls at once. Vercel blocked my Hobby account for using too much Active CPU, and the Upstash Redis behind my sites ran out of its 500,000 free commands for the month.
+
+As far as I can tell, neither was people. Crawlers had found the artist pages on my music app and were walking them link by link, and every page they hit cost a function call and a few Redis reads. In one day they filled 250 MB of Redis with cached lookups.
+
+Free tiers are generous until a bot finds you. I could have paid, but I wanted a setup where a crawler costs me nothing except a bit of CPU on hardware I can see. So this site, rutwik.dev, now runs on a Raspberry Pi in my flat. So does [TalkToData](https://talktodata.rutwik.dev/).
+
+## The plan started with a NAS
+
+My first idea was the NAS. My flatmate, who runs the hardware in our flat, ruled it out early, so it is not part of this story.
+
+What he offered instead was a Raspberry Pi 5 with 16 GB of RAM that already runs Docker and Pi-hole, the DNS server every device in the flat uses. That one fact shaped every decision after it. I was a guest on the machine that decides whether anyone at home can load a web page, so the rules were simple:
+
+- Publish no ports on the Pi. Nothing on the internet connects to it directly.
+- Cap every container's CPU and memory so Pi-hole always wins.
+- Never build on the Pi. It has an SD card and a DNS server to look after.
+- Touch nothing of his.
+
+He reviewed my design, wrote the compose file, set up a separate Linux user for me that can run only that file, and wrote the firewall rules. I wrote the images, the data move and the deploy tooling.
+
+## The shape of it
+
+```
+git push --> GitHub Actions (arm64 runner) --> ghcr.io image
+                                                    | pull
+visitor  --> Cloudflare --> tunnel (opened by the Pi) --> container
+```
+
+Each repo has a Dockerfile and a workflow that builds the image on GitHub's native arm64 runners, in under four minutes. Building arm64 on an x86 runner under emulation is several times slower. The Pi only ever pulls.
+
+The apps are Next.js, so the images use Next's standalone output, a self-contained server with only the dependencies it needs. I put that behind a flag so `next start` and Vercel keep working exactly as before:
+
+```js
+// next.config.js
+output: process.env.BUILD_STANDALONE === '1' ? 'standalone' : undefined,
+```
+
+For traffic, a Cloudflare Tunnel container on the Pi opens an outbound connection to Cloudflare, and Cloudflare sends requests back down it. There is no port forwarding on the router and my home IP never appears in DNS. Each hostname maps to one container by name.
+
+For data, both sites use `@upstash/redis`, which speaks HTTP, not the Redis protocol. Instead of rewriting that code I run Redis 8 next to a small open-source proxy, `serverless-redis-http`, that answers the same HTTP API. The apps did not change at all: two environment variables now point at the proxy instead of Upstash.
+
+## What broke on the way
+
+**Redis 7 refused the backup.** Upstash's export is RDB format version 14, and Redis 7 stops at "Can't handle RDB format version 14". Redis 8 loads it, so the fix was one line in the compose file.
+
+**Redis ignored the file anyway.** With append-only persistence turned on, Redis reads only its append-only files at startup and skips `dump.rdb` completely. Dropping the export in the data folder does nothing. The working order is to start Redis once with append-only off so it loads the dump, switch it on while running so it writes its own files from what it loaded, then start it normally. In short:
+
+```sh
+redis-server --appendonly no --dbfilename dump.rdb &
+redis-cli config set appendonly yes   # writes the append-only files from memory
+redis-cli shutdown nosave             # the real container finds them next start
+```
+
+The export also held 22,819 keys, of which only 333 belonged to this site. The rest was the music app's cache, so I copied over just the 333.
+
+**The memory limits were fiction.** Every container has a memory cap in the compose file. On this Pi they do nothing: the kernel boots with the memory cgroup disabled, and Docker says so in one line, "Limitation discarded", that is easy to scroll past. CPU caps work. With 14 GB free it is not urgent, and turning it on needs a reboot, which means a minute without DNS for the whole flat, so it waits for planned maintenance.
+
+**The sandbox had a side door.** TalkToData connects to whatever database a visitor types in, so it lives alone on its own Docker network with firewall rules that drop traffic to the home network. The catch is that Docker's `DOCKER-USER` chain only sees traffic being forwarded somewhere else. A packet from a container to the Pi's own address goes through the host's `INPUT` chain instead, so the container could still have reached the Pi's own services. It needed a second rule there. I tested it from inside the container: the Pi, the router and the other containers all time out, and the internet and the demo database still answer.
+
+**My status page locked me out.** More on that page below. Its first version refused every sign-in from a real browser. I had set `Referrer-Policy: no-referrer`, which makes browsers send `Origin: null` with form posts, and my check against cross-site posts rejected that. Every test I ran passed, because I tested with curl, and curl sends no Origin header at all. It now trusts the browser's `Sec-Fetch-Site` header first. Test forms in a browser.
+
+A few smaller cuts: the standalone server needs `HOSTNAME=0.0.0.0`, or it listens only on the container's own ID; DNSSEC has to be switched off at the registrar before moving nameservers, or the domain stops resolving; and Google Fonts sometimes returns a font URL that Next 14's font loader cannot parse, so an image build fails now and then and passes on a rerun.
+
+## Backups that are not on the same disk
+
+Redis holds this site's visitor count and analytics, and nothing else has a copy. A cron job snapshots it every night at 3:40, checks the file is a readable Redis dump, and keeps 7 daily, 4 weekly and 12 monthly copies. Each one is about 31 KB. I restored the first one into a scratch Redis on my laptop and got every key back before calling it done.
+
+Those snapshots still sit on the same SD card as Redis. They protect against a bad deploy or a wrong command, but an SD card failing is the most common way a Pi loses data, and it would take Redis and its backups together. A folder on a USB drive attached to the Pi is the next step.
+
+## Deploys are a script, on purpose
+
+Vercel deploys on every push. Here, GitHub can build the image but has no way to tell the Pi to fetch it, because nothing can open a connection to the Pi. The fixes are a timer on the Pi that polls for new images, or putting the build runner on a private network with the Pi. I chose neither for now.
+
+One command on my laptop waits for GitHub to finish building `main`, has the Pi pull the image, restarts only that one container, and checks the public URL answers. Every image is also tagged with its commit, so rolling back is the same command with an older commit. While I am the only one shipping, that is enough.
+
+## Watching it
+
+Vercel came with a dashboard. Now I have a small status page of my own, and it runs on Cloudflare Workers rather than the Pi, so when the Pi is down the page still loads and can say so.
+
+It checks on demand. Opening the page asks each site for its health route, GitHub for the newest commit and build, and Cloudflare for the tunnel and request counts. It shows whether each site runs what is on `main`, the Pi's load, temperature, memory and disk, and when the last backup finished. Nothing runs in the background. The one exception I want is a daily check that emails me only when a site is down or a backup was missed, and that is waiting on one more setting on the Cloudflare account.
+
+## Was it worth it
+
+The money side is easy. GitHub Actions is free on public repos, the image registry is free, Cloudflare's tunnel and Workers are on free plans, and the electricity was already being spent on DNS.
+
+Pages from the Pi come back through Cloudflare in about 100 to 250 ms from where I sit. The Pi barely notices: load has stayed under one on four cores whenever I have looked, it sits at 38 °C, and it uses about 1.4 GB of its 16 GB, including everything my flatmate already ran.
+
+What I gave up is real. The sites now depend on my flat's power and internet and on one SD card. The machine belongs to someone else, so every change to it starts with a message to him. And the music app, the one the crawlers found, is still on Vercel, because it has the most data to move. That move is next.
