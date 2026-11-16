@@ -115,7 +115,7 @@ export const thisSite = {
 export const experience: Experience[] = [
   {
     company: 'USC Marshall School of Business, Los Angeles, CA',
-    title: 'Research Assistant',
+    title: 'AI Engineer (Research Assistant)',
     period: 'Jan 2026 - May 2026',
     description: [
       'Built a RAG-based semantic search and chat platform in Python and LangChain over 10K+ OpenAI embeddings stored in Chroma, letting researchers query 500GB+ of structured and unstructured sustainability disclosures in natural language.',
@@ -159,7 +159,7 @@ export const experience: Experience[] = [
   },
   {
     company: 'USC Marshall School of Business, Los Angeles, CA',
-    title: 'Research Assistant',
+    title: 'Software Engineer, Backend (Research Assistant)',
     period: 'Feb 2024 - May 2025',
     description: [
       'Engineered fault-tolerant Python ETL pipelines chaining Selenium scraping, OCR, and indexing to ingest 15,000+ sustainability reports across 10 years of S&P 1500 filings into a unified research knowledge base.',
