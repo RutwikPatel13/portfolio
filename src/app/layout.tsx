@@ -260,7 +260,7 @@ export default function RootLayout({
                     {
                       '@type': 'OrganizationRole',
                       memberOf: { '@type': 'Organization', name: 'USC Marshall School of Business' },
-                      roleName: 'Research Assistant',
+                      roleName: 'AI Engineer (Research Assistant)',
                       startDate: '2026-01',
                       endDate: '2026-05',
                       description: 'Built a RAG-based semantic search and chat platform over 10K+ vector embeddings, letting 30+ researchers query 500GB+ of sustainability disclosures in natural language. Developed schema-guided LLM extraction pipelines with citation grounding and a feedback loop; cut 15+ hours per week of manual review.',
@@ -268,7 +268,7 @@ export default function RootLayout({
                     {
                       '@type': 'OrganizationRole',
                       memberOf: { '@type': 'Organization', name: 'USC Marshall School of Business' },
-                      roleName: 'Research Assistant',
+                      roleName: 'Software Engineer, Backend (Research Assistant)',
                       startDate: '2024-02',
                       endDate: '2025-05',
                       description: 'Engineered RAG system with 10K+ vector embeddings across 500GB+ data. Built automated pipeline processing 15K+ PDFs with 30% faster extraction.',
