@@ -45,6 +45,11 @@ COPY --from=build --chown=node:node /app/.next/static ./.next/static
 # and for the chat assistant's blog tool, so the MDX has to travel with the
 # server.
 COPY --from=build --chown=node:node /app/content ./content
+# The commit this image was built from, so /api/health can say what is
+# running. It comes last because it changes on every build: anything after it
+# could never be reused from the layer cache.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
 USER node
 EXPOSE 3000
 CMD ["node", "server.js"]
