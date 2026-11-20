@@ -24,9 +24,13 @@ import { redis, REDIS_KEYS } from '@/lib/redis';
 // Asked for on every check; a cached answer would be a stale reading.
 export const dynamic = 'force-dynamic';
 
-// Written by the nightly backup script on the Pi, not by this app, which is
-// why it sits outside the `portfolio:` namespace.
+// Written by scripts on the Pi, not by this app, which is why they sit outside
+// the `portfolio:` namespace: the nightly backup leaves its result, and the
+// auto-deploy job leaves the latest thing that happened plus a heartbeat that
+// proves it is still running.
 const BACKUP_STATUS_KEY = 'ops:backup';
+const DEPLOY_STATUS_KEY = 'ops:deploy';
+const DEPLOY_BEAT_KEY = 'ops:deploy-beat';
 
 type Host = {
   load1: number | null;
@@ -141,12 +145,21 @@ export async function GET(request: NextRequest) {
   };
   if (!knowsToken(request)) return NextResponse.json(summary);
 
-  const [host, redisStatus, backup] = await Promise.all([
+  const [host, redisStatus, backup, deployLast, deployBeat] = await Promise.all([
     readHost(),
     // Redis being down must not take this route down with it: the site still
     // answers, and the status page needs to say exactly that.
     readRedis().catch(() => null),
     redis.get<Record<string, unknown>>(BACKUP_STATUS_KEY).catch(() => null),
+    // Same reason: the page then says "no report", not "the site is down".
+    redis.get<Record<string, unknown>>(DEPLOY_STATUS_KEY).catch(() => null),
+    redis.get<number>(DEPLOY_BEAT_KEY).catch(() => null),
   ]);
-  return NextResponse.json({ ...summary, host, redis: redisStatus, backup });
+  return NextResponse.json({
+    ...summary,
+    host,
+    redis: redisStatus,
+    backup,
+    deploy: { last: deployLast, beatAt: deployBeat },
+  });
 }
