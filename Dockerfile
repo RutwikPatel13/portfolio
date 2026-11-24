@@ -1,11 +1,11 @@
 # syntax=docker/dockerfile:1
 
-# The image that runs the portfolio on the home Pi (linux/arm64). It is built
-# by GitHub Actions and only ever pulled on the Pi, so nothing here should
+# The image that runs the portfolio on the home server (linux/amd64). It is built
+# by GitHub Actions and only ever pulled on the server, so nothing here should
 # assume build tools exist at run time.
 #
 # Debian slim rather than Alpine: sharp, which resizes every next/image
-# request, ships a prebuilt glibc binary for arm64 and installs without a
+# request, ships a prebuilt glibc binary for amd64 and arm64 and installs without a
 # compiler.
 
 FROM node:22-bookworm-slim AS deps
