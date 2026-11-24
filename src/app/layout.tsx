@@ -4,8 +4,6 @@ import { GeistSans } from 'geist/font/sans';
 import { GeistMono } from 'geist/font/mono';
 import Script from 'next/script';
 import { MotionConfig } from 'motion/react';
-import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/next';
 import SmoothScrollProvider from '@/providers/SmoothScrollProvider';
 import ThemeProvider from '@/providers/ThemeProvider';
 import CommandPaletteProvider from '@/providers/CommandPaletteProvider';
@@ -359,10 +357,6 @@ export default function RootLayout({
             </CommandPaletteProvider>
           </ThemeProvider>
         </MotionConfig>
-
-        {/* Vercel Analytics & Speed Insights */}
-        <Analytics />
-        <SpeedInsights />
 
         {/* First-party behavioural analytics (see /admin/analytics) */}
         <SiteAnalytics />
