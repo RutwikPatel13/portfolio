@@ -3,6 +3,7 @@ import { readFile, statfs } from 'fs/promises';
 import { cpus } from 'os';
 import { NextRequest, NextResponse } from 'next/server';
 import { redis, REDIS_KEYS } from '@/lib/redis';
+import { getServiceCounts } from '@/lib/analytics';
 
 // ===========================================
 // Health: what the status page reads
@@ -31,9 +32,16 @@ export const dynamic = 'force-dynamic';
 const BACKUP_STATUS_KEY = 'ops:backup';
 const DEPLOY_STATUS_KEY = 'ops:deploy';
 const DEPLOY_BEAT_KEY = 'ops:deploy-beat';
+// ~/sites/server-snapshot.sh, every 5 minutes: what only the host can see
+// (containers, Wi-Fi, OS updates), so this container never needs Docker.
+const SERVER_STATUS_KEY = 'ops:server';
+// The status page's window for chat and contact counts.
+const ACTIVITY_DAYS = 7;
 
 type Host = {
   load1: number | null;
+  load5: number | null;
+  load15: number | null;
   cores: number;
   tempC: number | null;
   memTotalBytes: number | null;
@@ -91,9 +99,20 @@ async function readMemory(): Promise<Pick<Host, 'memTotalBytes' | 'memAvailableB
   }
 }
 
+async function readLoad(): Promise<Pick<Host, 'load1' | 'load5' | 'load15'>> {
+  try {
+    const [load1, load5, load15] = (await readFile('/proc/loadavg', 'utf8')).split(/\s+/).map(Number);
+    const ok = (n: number) => (Number.isFinite(n) ? n : null);
+    return { load1: ok(load1), load5: ok(load5), load15: ok(load15) };
+  } catch {
+    // Not on Linux: all three are reported as unknown.
+    return { load1: null, load5: null, load15: null };
+  }
+}
+
 async function readHost(): Promise<Host> {
-  const [load1, milliDegrees, uptimeSeconds, memory, disk] = await Promise.all([
-    firstNumber('/proc/loadavg'),
+  const [load, milliDegrees, uptimeSeconds, memory, disk] = await Promise.all([
+    readLoad(),
     firstNumber('/sys/class/thermal/thermal_zone0/temp'),
     firstNumber('/proc/uptime'),
     readMemory(),
@@ -102,7 +121,7 @@ async function readHost(): Promise<Host> {
     statfs('/').catch(() => null),
   ]);
   return {
-    load1,
+    ...load,
     cores: cpus().length,
     tempC: milliDegrees === null ? null : milliDegrees / 1000,
     ...memory,
@@ -145,7 +164,7 @@ export async function GET(request: NextRequest) {
   };
   if (!knowsToken(request)) return NextResponse.json(summary);
 
-  const [host, redisStatus, backup, deployLast, deployBeat] = await Promise.all([
+  const [host, redisStatus, backup, deployLast, deployBeat, server, activity] = await Promise.all([
     readHost(),
     // Redis being down must not take this route down with it: the site still
     // answers, and the status page needs to say exactly that.
@@ -154,6 +173,9 @@ export async function GET(request: NextRequest) {
     // Same reason: the page then says "no report", not "the site is down".
     redis.get<Record<string, unknown>>(DEPLOY_STATUS_KEY).catch(() => null),
     redis.get<number>(DEPLOY_BEAT_KEY).catch(() => null),
+    // Both fall back to null for the same reason: "not reported" on the page.
+    redis.get<Record<string, unknown>>(SERVER_STATUS_KEY).catch(() => null),
+    getServiceCounts(ACTIVITY_DAYS).catch(() => null),
   ]);
   return NextResponse.json({
     ...summary,
@@ -161,5 +183,7 @@ export async function GET(request: NextRequest) {
     redis: redisStatus,
     backup,
     deploy: { last: deployLast, beatAt: deployBeat },
+    server,
+    activity,
   });
 }
