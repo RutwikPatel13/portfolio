@@ -353,3 +353,59 @@ export async function getSnapshot(days: number, fresh = false): Promise<Analytic
 
   return snapshot;
 }
+
+// ===========================================
+// Service counts, for the status page
+// ===========================================
+
+export interface ServiceCounts {
+  days: number;
+  visitors: number;
+  pageviews: number;
+  chatQuestions: number;
+  chatCacheHits: number;
+  /** Which model took each question that reached one: { gemini: n, groq: n }. */
+  chatAnsweredBy: Record<string, number>;
+  chatUnavailable: number;
+  contactSent: number;
+  contactFailed: number;
+}
+
+/**
+ * The few numbers that say whether the site's services are working, without
+ * the dashboard's rankings: one command per day per structure plus one.
+ */
+export async function getServiceCounts(days: number): Promise<ServiceCounts> {
+  const window = recentDays(days);
+  const pipeline = redis.pipeline();
+  for (const day of window) pipeline.hgetall(K.events(day));
+  for (const day of window) pipeline.zrange(K.prop(day, 'chat_provider'), 0, -1, { withScores: true });
+  const [firstUniqueKey, ...otherUniqueKeys] = window.map(K.unique);
+  pipeline.pfcount(firstUniqueKey, ...otherUniqueKeys);
+  const results = await pipeline.exec<unknown[]>();
+
+  const totals: Record<string, number> = {};
+  for (const hash of results.slice(0, days)) {
+    for (const [event, count] of Object.entries((hash ?? {}) as Record<string, unknown>)) {
+      totals[event] = (totals[event] ?? 0) + (Number(count) || 0);
+    }
+  }
+  const chatAnsweredBy: Record<string, number> = {};
+  for (const raw of results.slice(days, days * 2)) {
+    for (const { value, count } of parseRanked(raw)) {
+      chatAnsweredBy[value] = (chatAnsweredBy[value] ?? 0) + count;
+    }
+  }
+
+  return {
+    days,
+    visitors: Number(results[days * 2]) || 0,
+    pageviews: totals.pageview ?? 0,
+    chatQuestions: totals.chat_question ?? 0,
+    chatCacheHits: totals.chat_cache_hit ?? 0,
+    chatAnsweredBy,
+    chatUnavailable: totals.chat_unavailable ?? 0,
+    contactSent: totals.contact_submit ?? 0,
+    contactFailed: totals.contact_failed ?? 0,
+  };
+}

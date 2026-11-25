@@ -7,7 +7,7 @@ import {
   readCachedReply,
   writeCachedReply,
 } from '@/lib/chat-cache';
-import { recordQuestion } from '@/lib/analytics';
+import { recordQuestion, recordServerEvent } from '@/lib/analytics';
 import { SYSTEM_PROMPT } from '@/lib/chat/knowledge';
 import { BUSY_MESSAGE, DROPPED_MESSAGE, openTurn, type WireMessage } from '@/lib/chat/agent';
 import { configuredProviders } from '@/lib/chat/providers';
@@ -160,6 +160,11 @@ export async function POST(request: NextRequest) {
     // The first call is made before the stream opens, so a spent budget still
     // comes back as a plain 429 the UI can explain.
     const turn = await openTurn(PROVIDERS, messages, abort.signal);
+    // Never throws, and gives up after a second: see recordServerEvent.
+    await recordServerEvent(
+      turn.ok ? 'chat_provider' : 'chat_unavailable',
+      turn.ok ? turn.provider : String(turn.status)
+    );
     if (!turn.ok) {
       return turn.status === 429
         ? ApiErrors.tooManyRequests(BUSY_MESSAGE)

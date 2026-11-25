@@ -31,7 +31,12 @@ export const SERVER_EVENTS = [
   'chat_question',
   'chat_cache_hit',
   'chat_cache_miss',
+  // Which model answered (prop: gemini or groq), and how often none would.
+  // Read by the status page, so a Gemini outage shows as Groq doing the work.
+  'chat_provider',
+  'chat_unavailable',
   'contact_submit',
+  'contact_failed',
 ] as const;
 
 export type ClientEvent = (typeof CLIENT_EVENTS)[number];

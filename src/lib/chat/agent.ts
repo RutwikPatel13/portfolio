@@ -159,7 +159,12 @@ export interface TurnResult {
 }
 
 export type OpenedTurn =
-  | { ok: true; run: (emit: (event: ChatEvent) => void) => Promise<TurnResult> }
+  | {
+      ok: true;
+      /** Who took the first call; the status page counts these to spot fallbacks. */
+      provider: Provider['name'];
+      run: (emit: (event: ChatEvent) => void) => Promise<TurnResult>;
+    }
   | { ok: false; status: number };
 
 /**
@@ -227,5 +232,5 @@ export async function openTurn(
     return { parts, usedLiveData, failed: false };
   };
 
-  return { ok: true, run };
+  return { ok: true, provider: providers[first.index].name, run };
 }

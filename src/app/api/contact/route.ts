@@ -96,6 +96,8 @@ export async function POST(request: NextRequest) {
     if (!response.ok) {
       const errorData = await response.json();
       console.error('Resend API error:', errorData);
+      // So the status page can say mail stopped going out, not just "quiet".
+      await recordServerEvent('contact_failed');
       return ApiErrors.internalError('Failed to send email. Please try again.');
     }
 
